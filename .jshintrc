@@ -1,0 +1,12 @@
+{
+   "esversion" : 6,
+   "undef": true,
+   "unused": true,
+   "globals": {
+      "MY_GLOBAL": true,
+      "window": true,
+      "document": true,
+      "Timing": true,
+      "requestAnimationFrame": true
+   }
+}
