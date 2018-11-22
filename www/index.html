@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="css/style.css" rel="stylesheet" type="text/css">
+  <script type="text/javascript" src="js/timing.js"></script>
+  <script type="text/javascript" src="js/main.js"></script>
+  <title>Tetris</title>
+</head>
+<body>
+  <p></p>
+  <div id="container">
+    <canvas id="game"></canvas>
+    <div id="panel">
+      <p class="label">Next : </p>
+      <canvas id="next"></canvas>
+      <p class="label">Score :</p> <p class="display" id="score">{score}</p>
+      <p class="label">Lines :</p> <p class="display" id="lines">{lines}</p>
+      <p class="label">Level: </p> <p class="display" id="level">{level}</p>
+      <p class="label">Timer: </p> <p class="display" id="timer">{timer}</p>
+      <p class="label">Debug: </p> <p class="display" id="debug">debug</p>
+    </div>
+  </div>
+  <p></p>
+  <div style="display: none">
+    <audio controls>
+      <!--
+        Music:
+        Tetris (Beware Boy, Videogames Are Evil) by Stealing Orchestra
+        is licensed under a Attribution-NonCommercial-NoDerivatives
+        (aka Music Sharing) 3.0 International License.
+      -->
+      <source src="media/Stealing_Orchestra_-_05_-_Tetris_Beware_Boy_Videogames_Are_Evil.mp3" type="audio/mpeg">
+    </audio>
+
+    <img id="squareE" src="img/square-e.png">
+    <img id="squareI" src="img/square-i.png">
+    <img id="squareJ" src="img/square-j.png">
+    <img id="squareL" src="img/square-l.png">
+    <img id="squareO" src="img/square-o.png">
+    <img id="squareS" src="img/square-s.png">
+    <img id="squareT" src="img/square-t.png">
+    <img id="squareZ" src="img/square-z.png">
+  </div>
+</body>
+</html>

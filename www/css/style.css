@@ -1,0 +1,52 @@
+/*
+** Stylesheet for tetris
+** game size : 12 x 22
+** piece size : 32 x 32 -> game pixel 384 x 704
+*/
+
+@font-face {
+    font-family: 'gamefont';
+    src: url('../media/2Dumb.ttf');
+}
+
+#container {
+    width: 624px;
+    height: 724px;
+    background-color: #444;
+    margin: auto;
+    display: flex;
+    flex-direction: row;
+    color: white;
+}
+
+#game {
+    width:  384px;
+    height: 704px;
+    background-color: #000;
+    margin: 10px;
+}
+
+#panel {
+    width:  200px;
+    height: 340px;
+    margin: 10px;
+    padding: 10px;
+}
+
+#next {
+    display: block;
+    width:  160px;
+    height: 96px;
+    background-color: #000;
+    margin: auto;
+}
+
+.label {
+    font-weight: bold;
+}
+
+.display {
+    position: relative;
+    top: -0.75em;
+    left: 10%;
+}
