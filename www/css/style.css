@@ -11,13 +11,25 @@
 
 #container {
     width: 624px;
-    height: 724px;
+    height: 800px;
     background-color: #444;
     margin: auto;
     display: flex;
     flex-direction: row;
     color: white;
 }
+#gameDiv {
+}
+
+#gamePad {
+    background-color: pink;
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+}
+
+
 
 #game {
     width:  384px;
@@ -49,4 +61,9 @@
     position: relative;
     top: -0.75em;
     left: 10%;
+}
+
+input[type="button"] {
+    width:  75px;
+    height: 75px;
 }
