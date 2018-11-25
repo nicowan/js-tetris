@@ -11,6 +11,8 @@ The game provides 2 kind of challenges :
 
 * **Sprint** :  The game starts with some randomly prefilled lines. To finish a level, the player must complete a given number of lines i a limited time. Over the levels, the game becomes faster and the number of line to complete increases.
 
+Try it out: https://nicowan.github.io/js-tetris/
+
 ## Assets
 
 The fonts used here were downloaded from https://www.1001freefonts.com/3dumb.font, they are published as *donationware*.
