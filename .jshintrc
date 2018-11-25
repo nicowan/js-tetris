@@ -1,12 +1,15 @@
 {
    "esversion" : 6,
+   "eqeqeq": true,
    "undef": true,
    "unused": true,
    "globals": {
       "MY_GLOBAL": true,
       "window": true,
       "document": true,
-      "Timing": true,
-      "requestAnimationFrame": true
+      "performance": true,
+      "requestAnimationFrame": true,
+      "UserInput": true,
+      "console" : true
    }
 }

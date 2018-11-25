@@ -5,13 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link href="css/style.css" rel="stylesheet" type="text/css">
   <script type="text/javascript" src="js/timing.js"></script>
+  <script type="text/javascript" src="js/user-inputs.js"></script>
   <script type="text/javascript" src="js/main.js"></script>
   <title>Tetris</title>
 </head>
 <body>
   <p></p>
   <div id="container">
-    <canvas id="game"></canvas>
+    <div id="gameDiv">
+      <canvas id="game"></canvas>
+      <div id="gamePad">
+        <input type="button" id="btnLeft"   value="<-"    > 
+        <input type="button" id="btnRight"  value="->"    > 
+        <input type="button" id="btnRotate" value="rot"   > 
+        <input type="button" id="btnDrop"   value="drop"  > 
+        <input type="button" id="btnAction" value="enter" > 
+      </div>
+    </div>
     <div id="panel">
       <p class="label">Next : </p>
       <canvas id="next"></canvas>
@@ -24,15 +34,15 @@
   </div>
   <p></p>
   <div style="display: none">
+    <!--
     <audio controls>
-      <!--
         Music:
         Tetris (Beware Boy, Videogames Are Evil) by Stealing Orchestra
         is licensed under a Attribution-NonCommercial-NoDerivatives
         (aka Music Sharing) 3.0 International License.
-      -->
       <source src="media/Stealing_Orchestra_-_05_-_Tetris_Beware_Boy_Videogames_Are_Evil.mp3" type="audio/mpeg">
     </audio>
+    -->
 
     <img id="squareE" src="img/square-e.png">
     <img id="squareI" src="img/square-i.png">

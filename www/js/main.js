@@ -11,228 +11,225 @@ window.onload = function (event) {
   game = new TetrisView();
 };
 
+
 class TetrisView {
    constructor() {
+      // Game management -------------------------------------------------------
+      this.tetris = new Tetris();                     // The game
+
       // Timing management -----------------------------------------------------
-      this.timeMsPrev  = NaN;          // Time stamp on previous update
-      this.timeMsDelta = 0;            // Ellapsed time since last update
-      this.timeMsLevel = 0;            // Timer used to limit level duration
-      this.timeMsAnim  = 0;            // Timer used to manage animations
-      this.timeMsMove  = 0;            // Timer used to limit move speed
-      this.timeMsFall  = 0;            // Timer used to limit fall speed
+      this.timeMsCurr  = performance.now();           // Time stamp on current update
+      this.timeMsPrev  = performance.now();           // Time stamp on previous update
+      this.timeMsDelta = 0;                           // Elapsed time since last update
+      this.timeMsAnim  = 0;                           // Timer used to manage animations
 
-      /** @type {Timing} Manages game timing and statistics */
-      this.viewTimer = new Timing(['animation']);
+      // State machine management ----------------------------------------------
+      this.states    = {
+         title:  0,           // Display title
+         config: 1,           // Display configuration
+         play:   2,           // Display the game
+         pause:  3,           // Display paused game
+         over:   4,           // Display Game over
+         delete: 5,           // Display line deletion animation
+         level:  6,           // Display level change screen
+      };
+      this.stateCurr = this.states.title;     // Current state
+      this.statePrev = null;                          // Previous state
 
-      /** @type {Tetris} Game logic */
-      this.model = new Tetris(this);
+      // Graphical display -----------------------------------------------------
+      this.size = 32;                                 // Pixel size of one block
 
-      /** @type {STATES} Game state */
-      this.state = TetrisView.STATES.title;
-
-      /** @type {Number} Size of a block expressed in pixel */
-      this.size = 32;
-
-      /** @type {Canvas} The canvas for the game field */
-      this.cnvGame = document.getElementById("game");
+      this.cnvGame = this.getHtml("#game")[0];        // Display for the game
+      this.ctxGame = this.cnvGame.getContext("2d");   // Drawing context for the game
       this.cnvGame.width  = 384;
       this.cnvGame.height = 704;
 
-      /** @type {Contex2D} Drawing context for the game */
-      this.ctxGame = this.cnvGame.getContext("2d");
-
-      /** @type {Canvas} The canvas for the next shape */
-      this.cnvNext = document.getElementById("next");
+      this.cnvNext = this.getHtml("#next")[0];        // Display for the next piece
+      this.ctxNext = this.cnvNext.getContext("2d");   // Drawing context
       this.cnvNext.width  = 160;
       this.cnvNext.height = 96;
 
-      /** @type {Contex2D} Drawing context for the next shape */
-      this.ctxNext = this.cnvNext.getContext("2d");
+      // Event managements -----------------------------------------------------
+      this.inputs = new UserInput();
+      this.inputs.addKeyBinding({
+         left:   "ArrowLeft",
+         right:  "ArrowRight",
+         drop:   "ArrowDown",
+         rotate: "ArrowUp",
+         action: "Enter"
+      });
 
-      /** @type {Object} Stores the current keyboard status */
-      this.keys = {};
-
-      // Attach keyboard events
-      document.addEventListener("keydown", (ev) => this.keyUpDownEvent(ev));
-      document.addEventListener("keyup",   (ev) => this.keyUpDownEvent(ev));
+      this.cnvGame.focus();
 
       // Start game update
-      this.update();
+      this.stateMachine();
    }
   
-   /**
-    * Store the state of the pressed / released keys
-    * @param {KeyEvent} event Key event data
-    */
-   keyUpDownEvent(event) {
-      let pressed  = (event.type == "keydown");
-      let keyState = this.keys[event.code];
-
-      if (keyState === undefined) {
-         keyState = { last: false, pressed: false };
-         this.keys[event.code] = keyState;
-      }
-
-      // Process event only on transition because keydown is repeated by browser
-      if (keyState.last !== pressed) {
-         keyState.last    = pressed;
-         keyState.pressed = pressed;
-
-         // TODO: beurk à changer
-         // Supported actions
-         if (event.code == TetrisView.KEYBOARD.left)   this.model.askLeft   = pressed;
-         if (event.code == TetrisView.KEYBOARD.right)  this.model.askRight  = pressed;
-         if (event.code == TetrisView.KEYBOARD.drop)   this.model.askDrop   = pressed;
-         if (event.code == TetrisView.KEYBOARD.rotate) this.model.askRotate = pressed;
-      }
-   }
-
-   /**
-    * Return the current key status
-    * @returns {Boolean} true when key is pressed, otherwise false
-    */
-   isKeyPressed(keyName) {
-      return (this.keys[keyName] !== undefined && this.keys[keyName].pressed);
-   }
-
-   /**
-    * Set the given key to released (not pressed)
-    * @param {String} keyName Name of the key to clear (set to released)
-    */
-   clearKey(keyName) {
-      if (this.keys[keyName] !== undefined) {
-         this.keys[keyName].pressed = false;
-      }
-   }
-  
-   /**
-    * Function called periodically which is synchronized with the screen refresh
-    */
-   update() {
+   /** Game refresh loop, state machine entry point */
+   stateMachine() {
       // request next frame update
-      requestAnimationFrame( () => this.update() );
+      requestAnimationFrame( () => this.stateMachine() );
 
-      // Manages all timer and time statistics
-      this.viewTimer.update();
+      // Manages the timers (compute the elapsed time)
+      this.timeMsCurr  = performance.now();
+      this.timeMsDelta = this.timeMsCurr - this.timeMsPrev;
+      this.timeMsPrev  = this.timeMsCurr;
 
-      // Display performance statistics
-      //document.getElementById("debug").innerHTML = (1000 / this.viewTimer.fps).toFixed(1);
-      document.getElementById("debug").innerHTML = this.model.debug;
+      this.getHtml("#debug")[0].innerText =
+         this.timeMsAnim + " / " + this.stateCurr + " / " + this.statePrev;
 
-      // Manages the display for the active state
-      switch (this.state) {
-         case TetrisView.STATES.play:  this.statePlay();  break;
-         case TetrisView.STATES.pause: this.statePause(); break;
-         case TetrisView.STATES.over:  this.stateOver();  break;
-         default:                      this.stateTitle(); break;
+      // Call the state machine
+      let init = this.stateCurr !== this.statePrev;
+      this.statePrev = this.stateCurr;
+      switch (this.stateCurr) {
+         case this.states.title  : this.stateCurr = this.stateTitle(init);  break;
+         case this.states.config : this.stateCurr = this.stateConfig(init); break;
+         case this.states.play   : this.stateCurr = this.statePlay(init);   break;
+         case this.states.pause  : this.stateCurr = this.statePause(init);  break;
+         case this.states.delete : this.stateCurr = this.stateDelete(init); break;
+         case this.states.level  : this.stateCurr = this.stateLevel(init);  break;
+         case this.states.over   : this.stateCurr = this.stateOver(init);   break;
+         default                 : this.stateCurr = this.states.title;      break;
       }
    }
   
    /** Display the title page */
-   stateTitle() {
-      // Start game when action key is pressed
-      if (this.isKeyPressed(TetrisView.KEYBOARD.action)) {
-         this.clearKey(TetrisView.KEYBOARD.action);
-         this.state = TetrisView.STATES.play;
-         this.model.newGame();
-         return;
+   stateTitle(init) {
+      this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
+
+      // Change state on action key
+      if (this.inputs.is('action')) {
+         this.inputs.clr('action');
+         this.tetris.start();
+         return this.states.play;
       }
-  
-      // Game not started, display the title page
+
+      // Title animation is done here ------------------------------------------
       this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
-  
-      if (this.viewTimer.getTimer('animation') > 1000) {
-         this.viewTimer.clrTimer('animation');
-      }
-      else if (this.viewTimer.getTimer('animation') < 500) {
-         this.writeCenterText(
-         this.ctxGame,
+      if (this.timeMsAnim < 750) {
+         this.writeCenterText( this.ctxGame,
             "Press ENTER to start",
             (this.cnvGame.width  / 2) || 0,
             (this.cnvGame.height / 2) || 0,
-            24,
-            "#ffaabb",
-            "gamefont"
-         );      
+            24, "#ffaabb", "gamefont"
+         );
       }
+      else if (this.timeMsAnim > 1000) {
+         this.timeMsAnim = 0;
+      }
+
+      return this.states.title;
    }
   
-   /** Game configugration screen */
-   stateConfigure() {
+   /** Game configuration screen */
+   stateConfigure(init) {
       // TODO
    }
 
    /** Display game while playing */
-   statePlay() {
-      // Enter pause ?
-      if (this.isKeyPressed(TetrisView.KEYBOARD.action)) {
-        this.clearKey(TetrisView.KEYBOARD.action);
-        this.state = TetrisView.STATES.pause;
-        this.model.waiting = true;
+   statePlay(init) {
+      // Change state on action key
+      if (this.inputs.is('action')) {
+         this.inputs.clr('action');
+         return this.states.pause;
       }
 
-      this.model.update();
+      // Update the game logic
+      this.tetris.update(this.timeMsDelta, this.inputs);
 
-      // Manage delay for line deletion animation
-      if (this.model.waiting) {
-         if (this.viewTimer.getTimer('animation') > 100) {
-            this.model.waiting = false;
-         }
-         else {
-            // TODO Show animation
-            return;
-         }
-      }
-  
-      // Detect end of game from the model state
-      if (this.model.playing == false) {
-        this.state = TetrisView.STATES.over;
-        this.viewTimer.clrTimer('animation');
-        return;
-      }
-  
-      // TODO: Update screen only when something changed in the game
-      if (true) {
-         this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
-         this.drawField();
-         this.drawShape(this.ctxGame, this.model.pieceGhost, 0, 0, ' ');
+      // The "nextLevel" flag is tested when the line deletion state is finished
+      // because this flag is always set after some lines were completed
 
-         let percentY = this.model.modelTimer.getTimer('dropSpeed') / this.model.getLevel().dropSpd;
-         let percentX = this.model.modelTimer.getTimer('moveSpeed') / this.model.getLevel().moveSpd;
+      if      (this.tetris.gameOver)                 { return this.states.over;   }
+      else if (this.tetris.linesToDelete.length > 0) { return this.states.delete; }
+      
+      // Compute the pixel shift for smooth movements
+      let oy = this.tetris.falling  * this.size * 
+               this.tetris.timeMsFall / this.tetris.getLevel().dropSpd;
+      let ox = -this.tetris.moving  * this.size * 
+               (1 - this.tetris.timeMsMove / this.tetris.getLevel().moveSpd);
 
-         this.drawShape(this.ctxGame, this.model.pieceCurr,
-            this.model.moving  * this.size * percentX,
-            this.model.falling * this.size * percentY
-         );
+      this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
+      this.drawBoard();
+      this.drawShape(this.ctxGame, this.tetris.pieceGhost, 0, 0, ' ');
+      this.drawShape(this.ctxGame, this.tetris.pieceCurr, ox, oy);
 
+      this.displayData();
 
-         this.ctxNext.clearRect(0, 0, this.cnvNext.width, this.cnvNext.height);
-         this.displayData();
-      }
+      return this.states.play;
    }
 
    /** Shows the line deletion animation */
-   stateLineDelete() {
+   stateDelete(init) {
+      this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
+
+      if (this.tetris.linesToDelete.length === 0 || this.timeMsAnim >= 300) {
+         this.tetris.linesToDelete = [];
+         if (this.tetris.mode === 'sprint') {
+            return (this.tetris.nextLevel) ? this.states.level : this.states.play;
+         }
+         else {
+            return this.states.play;
+         }
+
+      }
+
+      let color = "#000";
+
+      if (this.timeMsAnim < 100) {
+         color = "rgba(255, 255, 255, 0.25)";
+      }
+      else if (this.timeMsAnim < 200) {
+         color = "rgba(0, 0, 0, 0.25)";
+      }
+
+      for( let y of this.tetris.linesToDelete) {
+         for (let x = 0; x < this.tetris.board.width; x++) {
+            this.drawBlock(this.ctxGame, color, this.size * x, this.size * y);
+         }
+      }
+
+      return this.states.delete;
    }
 
    /** Shows a pause screen when a level is completed */
-   stateEndOfLevel() {
+   stateLevel(init) {
+      this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
+
+      if (this.timeMsAnim >= 1000) {
+         return this.states.play;
+      }
+
+      this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
+
+      this.writeCenterText(
+         this.ctxGame,
+         "Next level will start soon",
+         (this.cnvGame.width  / 2) || 0,
+         (this.cnvGame.height / 2) || 0,
+         24,
+         "#ffaabb",
+         "gamefont"
+      );      
+
+      return this.states.level;
    }
 
    /** Shows the pause screen */
-   statePause() {
+   statePause(init) {
+      this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
+
+      if (this.inputs.is('action')) {
+         this.inputs.clr('action');
+         return this.states.play;
+      }
+
       this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
 
-      if (this.isKeyPressed(TetrisView.KEYBOARD.action)) {
-         this.clearKey(TetrisView.KEYBOARD.action);
-         this.state = TetrisView.STATES.play;
-         this.model.newGame();
+      if (this.timeMsAnim > 1000) {
+         this.timeMsAnim = 0;
       }
-
-      if (this.viewTimer.getTimer('animation') > 1000) {
-         this.viewTimer.clrTimer('animation');
-      }
-      else if (this.viewTimer.getTimer('animation') < 500) {
+      else if (this.timeMsAnim < 500) {
          this.writeCenterText(
             this.ctxGame,
             "Press ENTER to resume",
@@ -243,130 +240,109 @@ class TetrisView {
             "gamefont"
          );      
       }
+
+      return this.states.pause;
    }
   
    /** Show the game over screen */
-   stateOver() {
+   stateOver(init) {
+      this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
+
       // Show gameover for 2 seconds
-      if (this.viewTimer.getTimer('animation') > 2000) {
-         this.state = TetrisView.STATES.title;
-         return;
+      if (this.timeMsAnim > 2000) {
+         return this.states.title;
       }
 
       this.ctxGame.clearRect(0, 0, this.cnvGame.width, this.cnvGame.height);
-      this.writeCenterText(
-         this.ctxGame,
-         "Game is over",
-         (this.cnvGame.width / 2) || 0,
-         (this.cnvGame.height / 2) || 0,
-         24,
-         "#ffaabb",
-         "gamefont"
-      );
+      this.writeCenterText( this.ctxGame, "Game is over",
+         (this.cnvGame.width / 2) || 0, (this.cnvGame.height / 2) || 0,
+         24, "#ffaabb", "gamefont");
+
+      return this.states.over;
    }
 
    /** Draw one block (a square) at the given position */ 
-   drawBlock(ctx, color, x, y) {
-      let w2 = 1;
-      ctx.save();
-
-      // Draw the filled square
-      ctx.fillStyle = color;
-      ctx.fillRect(x, y, this.size, this.size);
-
-      // Draw square border
-      ctx.beginPath();
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
-      ctx.lineWidth = 2 * w2;
-      ctx.moveTo(x + w2, y+w2);
-      ctx.lineTo(x - w2 + this.size, y + w2);
-      ctx.lineTo(x - w2 + this.size, y - w2 + this.size);
-      ctx.stroke();
-      ctx.closePath();
-
-      // Draw square border
-      ctx.beginPath();
-      ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
-      ctx.lineWidth = 2 * w2;
-      ctx.moveTo(x + w2, y + w2);
-      ctx.lineTo(x + w2,             y - w2 + this.size);
-      ctx.lineTo(x - w2 + this.size, y - w2 + this.size);
-      ctx.stroke();
-      ctx.closePath();
-
-      ctx.restore();
-   }
-
-   imgBlock(ctx, id, x, y) {
-      let img = document.getElementById("square" + id);
+   drawBlock(ctx, idColor, x, y) {
+      let img = document.getElementById("square" + idColor);
       if (img) {
+         // Image exist -> copy it in the canvas
          ctx.drawImage(img,x, y, this.size, this.size);
       }
       else {
-         this.drawBlock(ctx, "rgba(255, 255, 255, 0.1)", x, y);
+         // Fallback, draw the block in the canvas
+         let w2 = 1;
+         ctx.save();
+
+         // Draw the filled square
+         ctx.fillStyle = idColor;
+         ctx.fillRect(x, y, this.size, this.size);
+
+         // Draw square border
+         ctx.beginPath();
+         ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+         ctx.lineWidth = 2 * w2;
+         ctx.moveTo(x + w2, y+w2);
+         ctx.lineTo(x - w2 + this.size, y + w2);
+         ctx.lineTo(x - w2 + this.size, y - w2 + this.size);
+         ctx.stroke();
+         ctx.closePath();
+
+         // Draw square border
+         ctx.beginPath();
+         ctx.strokeStyle = "rgba(0, 0, 0, 0.5)";
+         ctx.lineWidth = 2 * w2;
+         ctx.moveTo(x + w2, y + w2);
+         ctx.lineTo(x + w2,             y - w2 + this.size);
+         ctx.lineTo(x - w2 + this.size, y - w2 + this.size);
+         ctx.stroke();
+         ctx.closePath();
+
+         ctx.restore();
       }
    }
 
-   /** Show the line deletion animation */
-   deleteLines(lines) {
-      this.model.waiting = true;
-      this.viewTimer.clrTimer('animation');
-      for(let i=0; i<lines.length; i++) {
-         for (let x = 0; x < this.model.board.width; x++) {
-            this.drawBlock(this.ctxGame, "#000", this.size * x, this.size * lines[i]);
-         }
-      }
-   }
-
-  
    /** Draw the entire play field (not the moveing shape) */
-   drawField() {
-      for (let y = 0; y < this.model.board.height; y++) {
-         for (let x = 0; x < this.model.board.width; x++) {
-               let id = this.model.board.getCell(x, y);
-               if (id != this.model.board.EMPTY) {
-                  this.imgBlock(
-                     this.ctxGame,
-                     id,
-                     x * this.size,
-                     y * this.size);
+   drawBoard() {
+      for (let y = 0; y < this.tetris.board.height; y++) {
+         for (let x = 0; x < this.tetris.board.width; x++) {
+               let id = this.tetris.board.getCell(x, y);
+               if (id !== this.tetris.board.EMPTY) {
+                  this.drawBlock(this.ctxGame, id, x * this.size, y * this.size);
                }
          }
       }
    }
 
-   /**
-   * Draw the shape in the given canvas
-   */
-   drawShape(ctx, shape, offx, offy, id) {
+   /** Draw the shape in the given canvas */
+   drawShape(ctx, shape, ox, oy, id) {
       let that  = this;
-      id = id || shape.id;
 
       // Set default value for optional parameters
-      offx = offx || 0;
-      offy = offy || 0;
+      id = id || shape.id;
+      ox = ox || 0;
+      oy = oy || 0;
 
       // Draw the blocks
       shape.foreach(function(x, y) {
-         that.imgBlock(
-            ctx,
-            id,
-            x * that.size + offx,
-            y * that.size + offy
-         );
+         that.drawBlock(ctx, id, x * that.size + ox, y * that.size + oy);
       });
    }   
 
-   /**
-    * Center a text at a given point
-    *
-    * @param {Context} aCtx    - Context to draw in
-    * @param {string}  aTxt    - The text
-    * @param {number}  aX, aY  - Center position
-    * @param {number}  aHeight - Font height in pixel
-    * @param {string}  aColor  - Text color
-    * @param {string}  aFont   - Font name
-    */
+   /** Compute the bounding box for a given shape */
+   boundingBox(shape) {
+      let r = {x0 : 10, x1 : -10, y0 : 10, y1 : -10};
+
+      shape.foreach( function(x, y) {
+         if ((x <= r.x0)) r.x0 = x;
+         if ((x >= r.x1)) r.x1 = x;
+         if ((y <= r.y0)) r.y0 = y;
+         if ((y >= r.y1)) r.y1 = y;
+      });
+
+      return r;
+   }
+
+   /** Center a text at a given point */
    writeCenterText(aCtx, aTxt, aX, aY, aHeight, aColor, aFont) {
       var width;
 
@@ -397,203 +373,118 @@ class TetrisView {
   
    /** Display the game data */
    displayData() {
-      document.getElementById("score").innerText = this.model.score;
-      document.getElementById("lines").innerText = this.model.line;
-      document.getElementById("level").innerText = this.model.level;  
-      document.getElementById("timer").innerText = (this.model.countdown / 1000).toFixed(1);
+      document.getElementById("score").innerText = this.tetris.score;
+      document.getElementById("lines").innerText = this.tetris.line;
+      document.getElementById("level").innerText = this.tetris.level;  
 
       // Compute the center point of the shape
-      let maxX = -10, minX = 10, maxY = -10, minY = 10;
-      this.model.pieceNext.foreach( function(x, y) {
-         if ((x <= minX)) minX = x;
-         if ((x >= maxX)) maxX = x;
-         if ((y <= minY)) minY = y;
-         if ((y >= maxY)) maxY = y;
-      });
+      let box = this.boundingBox(this.tetris.pieceNext);
+      let cx = Math.round((this.cnvNext.width  - (box.x1 + box.x0 + 1) * this.size) / 2);
+      let cy = Math.round((this.cnvNext.height - (box.y1 + box.y0 + 1) * this.size) / 2);
 
-      let cx = Math.round((this.cnvNext.width  - (maxX + minX + 1) * this.size) / 2);
-      let cy = Math.round((this.cnvNext.height - (maxY + minY + 1) * this.size) / 2);
-
-      this.drawShape(
-         this.ctxNext,
-         this.model.pieceNext,
-         cx,
-         cy
-      );
+      this.ctxNext.clearRect(0, 0, this.cnvNext.width, this.cnvNext.height);
+      this.drawShape(this.ctxNext, this.tetris.pieceNext, cx, cy);
    }
 
-   /** Convert tetromino ID to color, possible ID "OTZSILJ" */
-   idToColor(id) {
-      switch (id) {
-        case 'O': return "#ff0";
-        case 'T': return "#f0f";
-        case 'Z': return "#f00";
-        case 'S': return "#0f0";
-        case 'I': return "#0ff";
-        case 'L': return "#880";
-        case 'J': return "#00f";
-      }
-      return "#000";
-   }
-
-   /** The game view states */
-   static get STATES() {
-      return {
-         title:1,
-         play :2,
-         pause:3,
-         over :4
-      };
-   }
-    
-   /** The keyboard bindings action -> keyCode */
-   static get KEYBOARD() {
-      return {
-         left:   "ArrowLeft",
-         right:  "ArrowRight",
-         drop:   "ArrowDown",
-         rotate: "ArrowUp",
-         action: "Enter"
-      };
-   }
+   getHtml(selector) {
+      return document.querySelectorAll(selector);
+   }   
 }
 
 //------------------------------------------------------------------------------
 // GAME LOGIC
 class Tetris {
-   /**
-    * Create a new instance of the game logic
-    * @param {TetrisView} view 
-    */
-   constructor(view) {
-      /** @type {Timing} Manages game timing and statistics */
-      this.modelTimer = new Timing(['dropSpeed', 'moveSpeed', 'levelTime']);
-
-      /** @type {TetrisView} Reference to the view */
-      this.view = view || null;
+   /** Create a new instance of the game logic */
+   constructor(mode) {
+      this.timeMsLevel = 0;                           // Timer used to limit level duration
+      this.timeMsMove = 0;                            // Timer used to limit move speed
+      this.timeMsFall = 0;                            // Timer used to limit fall speed
   
-      /** @type {Number} Game field width expressed as squares  */
-      //this.width = 12;
-  
-      /** @type {Number} Game field height expressed as squares */
-      //this.height = 22;
-  
-      /** @type {Field} The game field */
-      this.board = new Board(12, 22);
-  
-      /** @type {Shape} The shape that is currently falling */
-      this.pieceCurr = null;
+      this.board = new Board(12, 22);                 // Game board (array of strings)
+      this.mode = mode || 'normal';                   // 'finished', 'normal' or 'sprint' game
+      this.level = 1;                                 // Game level
+      this.score = 0;                                 // Game score
+      this.line = 0;                                  // Counts the deleted lines
 
-      /** @type {Shape} The next shape in the game */
-      this.pieceNext = null;
+      this.pieceCurr = null;                          // Current piece
+      this.pieceNext = null;                          // Next piece
+      this.pieceGhost = null;                         // Ghost piece
 
-      /** @type {Shape} The next shape in the game */
-      this.pieceGhost = null;
+      // Theses are used by the pixel scrolling
+      this.falling     = 1;                           // Fall direction
+      this.moving      = 0;                           // Move direction
 
-      /**
-       * @type {Number} Is the shape falling 1:yes, 0 no.
-       * This field is usefull for the pixel precise falling animation
-       */
-      this.falling = 1;
-      this.moving  = 0;
-
-      /** @type {Number} Game level */
-      this.level = 1;
-  
-      /** @type {Number} Counts the completed lines */
-      this.line = 0;
-  
-      /** @type {Number} Game score */
-      this.score = 0;
-  
-      /** @type {Number} Kind of game (normal or sprint) */
-      this.gameMode = Tetris.GAME_MODES.normal;
-  
-      /** @type {Boolean} Is the game playing */
-      this.playing = false;
-  
-      /** @type {Boolean} Is the game waiting for animation's end */
-      this.waiting = false;
-
-      /** Asked to move left */
-      this.askLeft = false;
-
-      /** Asked to move right */
-      this.askRight = false;
-
-      /** Asked to rotate */
-      this.askRotate = false;
-
-      /** Asked drop the piece */
-      this.askDrop = false;
+      // Theses are used to change the display state
+      this.linesToDelete = [];                        // List of lines to delete
+      this.gameOver      = false;                     // Is game over or not
+      this.nextLevel     = false;                     // Level just changed
    }
-  
-   /**
-    * Initialise the model to start a new game
-    */
-   newGame() {
-      this.board.generateEmpty();
-      this.pieceCurr   = new Shape({x: this.board.width / 2 - 2});
-      this.pieceNext   = new Shape({x: this.board.width / 2 - 2});
-      this.pieceGhost = new Shape(this.pieceCurr);
+
+   /** Start a new game, action depends on the selected mode */
+   start(mode) {
+      this.board.clear();
+
       this.level = 1;
       this.line = 0;
       this.score = 0;
-      this.playing = true;
 
-      if (this.gameMode === Tetris.GAME_MODES.sprint) {
-         this.modelTimer.clrTimer('levelTime');
+      this.pieceCurr = new Shape({x: this.board.width / 2 - 2});
+      this.pieceNext = new Shape({x: this.board.width / 2 - 2});
+      this.pieceGhost = new Shape(this.pieceCurr);
+
+      this.timeMsLevel = 0;
+      this.timeMsMove = 0;
+      this.timeMsFall = 0;
+
+      this.mode = mode || 'normal';
+      this.gameOver = false;
+      this.linesToDelete = [];
+
+      if (this.mode === 'sprint') {
          this.board.insertLines(5);
       }
-      this.modelTimer.refresh();
-      this.modelTimer.clrTimer('dropSpeed');
    }
-  
-   /**
-    * Timer callback which is responsible to compute next game step
-    */
-   update() {
+
+   /** Updates the game "model" */
+   update(timeMsDelta, actions) {
+      // Manage timings
+      this.timeMsLevel += timeMsDelta;
+      this.timeMsMove  += timeMsDelta;
+      this.timeMsFall  += timeMsDelta;
+
+         this.nextLevel = false;
 
 
-      // Exit if not in game or waiting for view animation
-      if (!this.playing || this.waiting) {
-         this.modelTimer.refresh();
+      if ((this.mode === 'sprint') && (this.timeMsLevel > this.getLevel().maxTime)) {
+         this.gameOver = true;
          return;
       }
 
-      // Manage game time variables
-      this.modelTimer.update();
-      if (this.gameMode === Tetris.GAME_MODES.sprint) {
-         if (this.modelTimer.getTimer('levelTime') >= this.getLevel().maxTime) {
-            this.playing = false;
-         }
-      }
-
+      // Manage the actions
       let temp = new Shape(this.pieceCurr);
       this.falling = temp.move(this.board, 0, +1) ? 1 : 0;
 
-      if (this.modelTimer.getTimer('moveSpeed') >= this.getLevel().moveSpd) {
-         this.modelTimer.clrTimer('moveSpeed');
+      // Move timer is over
+      if (this.timeMsMove >= this.getLevel().moveSpd) {
+         let firstMove = this.timeMsFall < 2 * this.timeMsMove;
          this.moving = 0;
 
-         let firstMove = this.modelTimer.getTimer('dropSpeed') < 2 * this.getLevel().moveSpd;
-
          // Try to move the shape as requested by the player
-         if (this.askLeft && (firstMove || temp.move(this.board,-1,0))) {
+         if (actions.is('left') && (firstMove || temp.move(this.board,-1,0))) {
             if (this.pieceCurr.move(this.board, -1, 0)) {
-               //this.moving = -1;
+               this.moving = -1;
             }
          }
    
-         if (this.askRight && (firstMove || temp.move(this.board,1,0))) {
+         if (actions.is('right') && (firstMove || temp.move(this.board,1,0))) {
             if (this.pieceCurr.move(this.board, +1, 0)) {
-               //this.moving = +1;
+               this.moving = +1;
             }
          }
    
-         if (this.askRotate) {
+         if (actions.is('rotate')) {
             this.pieceCurr.rotate(this.board, 1);
-            this.askRotate = false;
+            actions.clr('rotate');
          }
 
          // Compute the ghost piece
@@ -603,32 +494,32 @@ class Tetris {
          while(this.pieceGhost.move(this.board, 0, 1)) {
             // nothing to do
          }
+
+         this.timeMsMove = 0;
       }
 
-      if (this.askDrop || this.modelTimer.getTimer('dropSpeed') >= this.getLevel().dropSpd) {
-         this.modelTimer.clrTimer('dropSpeed');
+      // Fall timer is over
+      if (actions.is('drop') || this.timeMsFall >= this.getLevel().dropSpd) {
+         this.timeMsFall = 0;
 
          // Move the shape down and exit if the move was possible
          if (!this.pieceCurr.move(this.board, 0, +1)) {
             // Stop key repetition for the next piece
-            this.askDrop = false;
+            actions.clr('drop');
 
             // Write the shape in the game field
             this.pieceCurr.write(this.board);
 
-            this.debug = this.pieceCurr.y;
-
             // Delete completed lines
-            let lines = this.board.searchFullLines();
-            if (lines.length > 0) {
-               this.view.deleteLines(lines);
-               this.board.deleteLines(lines);
-               this.computeScore(lines);
+            this.linesToDelete = this.board.searchFullLines();
+            if (this.linesToDelete.length > 0) {
+               this.board.deleteLines(this.linesToDelete);
+               this.computeScore(this.linesToDelete);
             }
 
             // Game is over when the shape is still at the top of the play field
-            if (this.pieceCurr.y == 0) {
-               this.playing = false;
+            if (this.pieceCurr.y === 0) {
+               this.gameOver = true;
             }
 
             //generate a new piece
@@ -644,13 +535,14 @@ class Tetris {
     * @param {Array} lines array of deleted lines
     */
    computeScore(lines) {
-      if (this.gameMode == Tetris.GAME_MODES.normal) {
+      if (this.mode === 'normal') {
          this.score += 1;                    // Score for a new piece
          this.score += lines.length * 100;   // Score for completed lines
          this.line  += lines.length;
 
          if (this.line >= this.getLevel().nbLine) {
             this.level += 1;
+            this.nextLevel = true;
          }
       }
       else {
@@ -660,33 +552,29 @@ class Tetris {
 
          if (this.line >= 5) {
             this.level += 1;
-            // TODO : view has to block until level starts
+            this.nextLevel = true;
             this.board.insertLines(10);
          }
       }
-
-
    }
 
    /** Returns the current level definition */
    getLevel() {
-      let levelData;
-      if (this.gameMode === Tetris.GAME_MODES.normal) {
-         levelData = [
-            {nbLine:   5, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 500, moveSpd: 100}, // not used
-            {nbLine:   5, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 500, moveSpd: 100}, // 1
-            {nbLine:  10, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 450, moveSpd: 100}, // 2
-            {nbLine:  15, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 400, moveSpd: 100}, // 3
-            {nbLine:  20, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 350, moveSpd: 100}, // 4
-            {nbLine:  25, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 300, moveSpd: 100}, // 5
-            {nbLine:  30, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 250, moveSpd: 100}, // 6
-            {nbLine:  35, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 200, moveSpd: 100}, // 7
-            {nbLine:  40, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 150, moveSpd: 100}, // 8
-            {nbLine:  45, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 100, moveSpd: 100}, // 9
-            {nbLine: 999, maxTime: Number.MAX_SAFE_INTEGER, dropSpd:  50, moveSpd: 100}  // 10
+      let levelData = [
+            {nbLine:   1, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 500, moveSpd: 80}, // not used
+            {nbLine:   1, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 500, moveSpd: 80}, // 1
+            {nbLine:  10, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 450, moveSpd: 80}, // 2
+            {nbLine:  15, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 400, moveSpd: 80}, // 3
+            {nbLine:  20, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 350, moveSpd: 80}, // 4
+            {nbLine:  25, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 300, moveSpd: 80}, // 5
+            {nbLine:  30, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 250, moveSpd: 80}, // 6
+            {nbLine:  35, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 200, moveSpd: 80}, // 7
+            {nbLine:  40, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 150, moveSpd: 80}, // 8
+            {nbLine:  45, maxTime: Number.MAX_SAFE_INTEGER, dropSpd: 100, moveSpd: 80}, // 9
+            {nbLine: 999, maxTime: Number.MAX_SAFE_INTEGER, dropSpd:  50, moveSpd: 80}  // 10
          ];
-      }
-      else if (this.gameMode === Tetris.GAME_MODES.sprint) {
+
+      if (this.mode === 'sprint') {
          levelData = [
             {nbLine:   5, maxTime: 30000, dropSpd: 500, moveSpd: 100},  // index 0 is not used
             {nbLine:   5, maxTime: 30000, dropSpd: 500, moveSpd: 100},
@@ -701,6 +589,7 @@ class Tetris {
             {nbLine: 999, maxTime: 30000, dropSpd:  50, moveSpd: 100}
          ];
       }
+
       return levelData[this.level];
    }
 
@@ -729,7 +618,7 @@ class Board {
    }
   
    /** Generate an empty game field */
-   generateEmpty() {
+   clear() {
       this._board = Array(this.height).fill(this.EMPTY.repeat(this.width));
    }
 
@@ -791,7 +680,7 @@ class Board {
       let result = Array(this.width).fill(this.EMPTY);
       for(let count = this.width; count > nbEmpty; ) {
          let idx = Math.floor(Math.random() * this.width);
-         if (result[idx] == this.EMPTY) {
+         if (result[idx] === this.EMPTY) {
             result[idx] = Shape.randomId;
             count -= 1;
          }
@@ -847,7 +736,7 @@ class Shape {
       let ok = true;
       this.foreach(function(x, y) {
          ok = ok && board.isInsideOrAbove(x,y) &&
-                   (board.getCell(x,y) == board.EMPTY);
+                   (board.getCell(x,y) === board.EMPTY);
       });
       return ok;
    }
