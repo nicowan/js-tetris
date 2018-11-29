@@ -51,12 +51,21 @@ class TetrisView {
 
       // Event managements -----------------------------------------------------
       this.inputs = new UserInput();
-      this.inputs.addKeyBinding({
-         left:   "ArrowLeft",
-         right:  "ArrowRight",
-         drop:   "ArrowDown",
-         rotate: "ArrowUp",
-         action: "Enter"
+
+      this.inputs.defineKeys({
+         "ArrowLeft":  "left",
+         "ArrowRight": "right",
+         "ArrowDown":  "drop",
+         "ArrowUp":    "rotate",
+         "Enter":      "action",
+      });
+
+      this.inputs.defineClicks({
+         "btnLeft":     "left",
+         "btnRight":    "right",
+         "btnDrop":     "drop",
+         "btnRotate":   "rotate",
+         "btnAction":   "action",
       });
 
       this.cnvGame.focus();
@@ -76,7 +85,9 @@ class TetrisView {
       this.timeMsPrev  = this.timeMsCurr;
 
       this.getHtml("#debug")[0].innerText =
-         this.timeMsAnim + " / " + this.stateCurr + " / " + this.statePrev;
+            " left  " + this.inputs.is('left') +
+            " right " + this.inputs.is('right');
+      //   this.timeMsAnim + " / " + this.stateCurr + " / " + this.statePrev;
 
       // Call the state machine
       let init = this.stateCurr !== this.statePrev;
@@ -99,7 +110,7 @@ class TetrisView {
 
       // Change state on action key
       if (this.inputs.is('action')) {
-         this.inputs.clr('action');
+         this.inputs.stop('action');
          this.tetris.start();
          return this.states.play;
       }
@@ -130,7 +141,7 @@ class TetrisView {
    statePlay(init) {
       // Change state on action key
       if (this.inputs.is('action')) {
-         this.inputs.clr('action');
+         this.inputs.stop('action');
          return this.states.pause;
       }
 
@@ -220,7 +231,7 @@ class TetrisView {
       this.timeMsAnim = (init) ? 0 : this.timeMsAnim + this.timeMsDelta;
 
       if (this.inputs.is('action')) {
-         this.inputs.clr('action');
+         this.inputs.stop('action');
          return this.states.play;
       }
 
@@ -396,9 +407,10 @@ class TetrisView {
 class Tetris {
    /** Create a new instance of the game logic */
    constructor(mode) {
-      this.timeMsLevel = 0;                           // Timer used to limit level duration
-      this.timeMsMove = 0;                            // Timer used to limit move speed
-      this.timeMsFall = 0;                            // Timer used to limit fall speed
+      this.timeMsLevel  = 0;                          // Timer used to limit level duration
+      this.timeMsMove   = 0;                          // Timer used to limit move speed
+      this.timeMsRotate = 0;                          // Timer used to limit move speed
+      this.timeMsFall   = 0;                          // Timer used to limit fall speed
   
       this.board = new Board(12, 22);                 // Game board (array of strings)
       this.mode = mode || 'normal';                   // 'finished', 'normal' or 'sprint' game
@@ -432,9 +444,10 @@ class Tetris {
       this.pieceNext = new Shape({x: this.board.width / 2 - 2});
       this.pieceGhost = new Shape(this.pieceCurr);
 
-      this.timeMsLevel = 0;
-      this.timeMsMove = 0;
-      this.timeMsFall = 0;
+      this.timeMsLevel  = 0;
+      this.timeMsMove   = 0;
+      this.timeMsRotate = 0;
+      this.timeMsFall   = 0;
 
       this.mode = mode || 'normal';
       this.gameOver = false;
@@ -452,8 +465,7 @@ class Tetris {
       this.timeMsMove  += timeMsDelta;
       this.timeMsFall  += timeMsDelta;
 
-         this.nextLevel = false;
-
+      this.nextLevel = false;
 
       if ((this.mode === 'sprint') && (this.timeMsLevel > this.getLevel().maxTime)) {
          this.gameOver = true;
@@ -465,26 +477,34 @@ class Tetris {
       this.falling = temp.move(this.board, 0, +1) ? 1 : 0;
 
       // Move timer is over
-      if (this.timeMsMove >= this.getLevel().moveSpd) {
-         let firstMove = this.timeMsFall < 2 * this.timeMsMove;
+      if (this.timeMsMove >= this.getLevel().moveSpd ||
+          actions.isEdge('left') || actions.isEdge('right')) {
+         let firstMove = this.timeMsFall < 20;
          this.moving = 0;
 
          // Try to move the shape as requested by the player
-         if (actions.is('left') && (firstMove || temp.move(this.board,-1,0))) {
-            if (this.pieceCurr.move(this.board, -1, 0)) {
-               this.moving = -1;
+         if (actions.is('left')) {
+            actions.clearEdge('left');
+            if (firstMove || temp.move(this.board,-1,0)) {
+               if (this.pieceCurr.move(this.board, -1, 0)) {
+                  this.moving = -1;
+               }
             }
          }
    
-         if (actions.is('right') && (firstMove || temp.move(this.board,1,0))) {
-            if (this.pieceCurr.move(this.board, +1, 0)) {
-               this.moving = +1;
+         if (actions.is('right')) {
+            actions.clearEdge('right');
+            if (firstMove || temp.move(this.board,1,0)) {
+               if (this.pieceCurr.move(this.board, +1, 0)) {
+                  this.moving = +1;
+               }
             }
          }
-   
+
          if (actions.is('rotate')) {
+            actions.clearEdge('rotate');
             this.pieceCurr.rotate(this.board, 1);
-            actions.clr('rotate');
+            actions.stop('rotate');
          }
 
          // Compute the ghost piece
@@ -500,12 +520,13 @@ class Tetris {
 
       // Fall timer is over
       if (actions.is('drop') || this.timeMsFall >= this.getLevel().dropSpd) {
+         actions.clearEdge('drop');
          this.timeMsFall = 0;
 
          // Move the shape down and exit if the move was possible
          if (!this.pieceCurr.move(this.board, 0, +1)) {
             // Stop key repetition for the next piece
-            actions.clr('drop');
+            actions.stop('drop');
 
             // Write the shape in the game field
             this.pieceCurr.write(this.board);
@@ -814,7 +835,7 @@ class Shape {
       };
    }
 
-   /** Returngs the possibles IDs for tetrominos */
+   /** Returns the possibles IDs for tetrominos */
    static get ID() {
       return "OTZSILJ";
    }

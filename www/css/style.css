@@ -9,6 +9,9 @@
     src: url('../media/2Dumb.ttf');
 }
 
+#main {
+    width: 624px;
+}
 #container {
     width: 624px;
     height: 800px;

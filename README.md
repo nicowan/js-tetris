@@ -23,7 +23,6 @@ The fonts used here were downloaded from https://www.1001freefonts.com/3dumb.fon
    * Afficher ou non la prochaine pièce
    * Montrer la destination finale de la pièce
 * Ajouter le hard fall qui envoie la pièce tout en bas d'un coup
-* Fonctionnement en mode tactile (joystick à l'écran)
 * Sauver les score en local
 * Sauver la configuration en local
 * Possibilité de configurer les touches du clavier
@@ -31,3 +30,4 @@ The fonts used here were downloaded from https://www.1001freefonts.com/3dumb.fon
 * DONE Descente des pièces pixels par pixels
 * DONE Animation des lignes qui s'effacent
 * DONE Implémenter le mode *Sprint*
+* DONE Fonctionnement en mode tactile (joystick à l'écran)

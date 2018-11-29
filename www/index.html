@@ -10,29 +10,29 @@
   <title>Tetris</title>
 </head>
 <body>
-  <p></p>
-  <div id="container">
-    <div id="gameDiv">
-      <canvas id="game"></canvas>
-      <div id="gamePad">
-        <input type="button" id="btnLeft"   value="<-"    > 
-        <input type="button" id="btnRight"  value="->"    > 
-        <input type="button" id="btnRotate" value="rot"   > 
-        <input type="button" id="btnDrop"   value="drop"  > 
-        <input type="button" id="btnAction" value="enter" > 
+  <div id="main">
+    <div id="container">
+      <div id="gameDiv">
+        <canvas id="game"></canvas>
+      </div>
+      <div id="panel">
+        <p class="label">Next : </p>
+        <canvas id="next"></canvas>
+        <p class="label">Score :</p> <p class="display" id="score">{score}</p>
+        <p class="label">Lines :</p> <p class="display" id="lines">{lines}</p>
+        <p class="label">Level: </p> <p class="display" id="level">{level}</p>
+        <p class="label">Timer: </p> <p class="display" id="timer">{timer}</p>
+        <p class="label">Debug: </p> <p class="display" id="debug">debug</p>
       </div>
     </div>
-    <div id="panel">
-      <p class="label">Next : </p>
-      <canvas id="next"></canvas>
-      <p class="label">Score :</p> <p class="display" id="score">{score}</p>
-      <p class="label">Lines :</p> <p class="display" id="lines">{lines}</p>
-      <p class="label">Level: </p> <p class="display" id="level">{level}</p>
-      <p class="label">Timer: </p> <p class="display" id="timer">{timer}</p>
-      <p class="label">Debug: </p> <p class="display" id="debug">debug</p>
+    <div id="gamePad">
+      <input type="button" id="btnLeft"   value="<-"    > 
+      <input type="button" id="btnRight"  value="->"    > 
+      <input type="button" id="btnRotate" value="rot"   > 
+      <input type="button" id="btnDrop"   value="drop"  > 
+      <input type="button" id="btnAction" value="enter" > 
     </div>
   </div>
-  <p></p>
   <div style="display: none">
     <!--
     <audio controls>
